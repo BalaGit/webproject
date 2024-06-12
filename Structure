@@ -1,0 +1,19 @@
+├── main.tf
+├── variables.tf
+├── outputs.tf
+├── backend.tf
+├── azure-pipelines.yaml
+├── modules
+│   ├── resource_group
+│   │   ├── main.tf
+│   │   ├── variables.tf
+│   │   ├── outputs.tf
+│   ├── network
+│   │   ├── main.tf
+│   │   ├── variables.tf
+│   │   ├── outputs.tf
+│   ├── app_service
+│   │   ├── main.tf
+│   │   ├── variables.tf
+│   │   ├── outputs.tf
+│   ├── others (for any other modules you need)

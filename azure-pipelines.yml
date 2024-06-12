@@ -1,0 +1,210 @@
+trigger: none
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  - group: MYFDEV # Name of the variable group containing sensitive information
+
+  - name: location
+    value: "East US"
+  - name: web_app_resource_group_name
+    value: "WebApp-RG"
+  - name: network_resource_group_name
+    value: "Network-RG"
+  - name: redis_cache_name
+    value: "myfdevrediscacheserver"
+  - name: redis_capacity
+    value: "0"
+  - name: redis_family
+    value: "C"
+  - name: redis_sku_name
+    value: "Standard"
+  - name: cosmosdb_account_name
+    value: "myfdevcosmosserver"
+  - name: app_service_plan_name
+    value: "myfdevhp"
+  - name: api_app_name
+    value: "myfdevapiapp"
+  - name: frontend_app_name
+    value: "myfdevfrontendapp"
+  - name: vnet_name
+    value: "MYFDEV-NETWORK"
+  - name: vnet_cidr
+    value: "10.0.0.0/16"
+  - name: app_gateway_subnet_cidr
+    value: "10.0.1.0/24"
+  - name: private_api_subnet_cidr
+    value: "10.0.2.0/24"
+  - name: api_plink_subnet_cidr
+    value: "10.0.4.0/24"
+  - name: database_subnet_cidr
+    value: "10.0.3.0/26"
+  - name: app_gateway_public_ip_cidr
+    value: "20.50.0.0/16"
+  - name: app_gateway_name
+    value: "myfdev-appgw"
+  - name: app_gateway_public_ip_id
+    value: "your_public_ip_id"  # Add this line
+  - name: app_gateway_public_ip_name
+    value: "myfdev-appgw-pip"
+  - name: ssl_certificate_path
+    value: "path_to_your_ssl_certificate"  # Add this line
+  - name: ssl_certificate_password
+    value: "Temenos@1234"  # Make sure to secure this
+  - name: collection_name
+    value: "mycollection"
+  - name: database_name
+    value: "mydatabase"
+
+stages:
+- stage: InitAndValidate
+  jobs:
+  - job: TerraformInitAndValidate
+    displayName: 'Terraform Init and Validate'
+    steps:
+    - checkout: self
+
+    - task: DownloadSecureFile@1
+      inputs:
+        secureFile: 'certificate.pfx'
+
+    - script: |
+        sudo apt-get update && sudo apt-get install -y gnupg software-properties-common curl
+        curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
+        sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
+        sudo apt-get update && sudo apt-get install terraform
+        export ARM_CLIENT_ID=$(client_id)
+        export ARM_CLIENT_SECRET=$(client_secret)
+        export ARM_SUBSCRIPTION_ID=$(subscription_id)
+        export ARM_TENANT_ID=$(tenant_id)
+        terraform init
+      displayName: 'Install and Initialize Terraform'
+    
+    - task: AzureCLI@2
+      inputs:
+        azureSubscription: 'Automation'  # Update with your service connection name
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          az account show
+
+    - script: terraform validate
+      displayName: 'Terraform Validate'
+
+- stage: Plan
+  dependsOn: InitAndValidate
+  jobs:
+  - job: TerraformPlan
+    displayName: 'Terraform Plan'
+    steps:
+    - checkout: self
+
+    - task: AzureCLI@2
+      inputs:
+        azureSubscription: 'Automation'  # Update with your service connection name
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          az account show
+    - script: |
+        export ARM_CLIENT_ID=$(client_id)
+        export ARM_CLIENT_SECRET=$(client_secret)
+        export ARM_SUBSCRIPTION_ID=$(subscription_id)
+        export ARM_TENANT_ID=$(tenant_id)
+        terraform init
+      displayName: 'Terraform init'
+    - script: |
+        export ARM_CLIENT_ID=$(client_id)
+        export ARM_CLIENT_SECRET=$(client_secret)
+        export ARM_SUBSCRIPTION_ID=$(subscription_id)
+        export ARM_TENANT_ID=$(tenant_id)
+        terraform plan \
+          -var "web_app_resource_group_name=$(web_app_resource_group_name)" \
+          -var "network_resource_group_name=$(network_resource_group_name)" \
+          -var "location=$(location)" \
+          -var "redis_cache_name=$(redis_cache_name)" \
+          -var "redis_capacity=$(redis_capacity)" \
+          -var "redis_family=$(redis_family)" \
+          -var "redis_sku_name=$(redis_sku_name)" \
+          -var "cosmosdb_account_name=$(cosmosdb_account_name)" \
+          -var "app_service_plan_name=$(app_service_plan_name)" \
+          -var "api_app_name=$(api_app_name)" \
+          -var "frontend_app_name=$(frontend_app_name)" \
+          -var "vnet_name=$(vnet_name)" \
+          -var "vnet_cidr=$(vnet_cidr)" \
+          -var "app_gateway_subnet_cidr=$(app_gateway_subnet_cidr)" \
+          -var "api_plink_subnet_cidr=$(api_plink_subnet_cidr)" \
+          -var "private_api_subnet_cidr=$(private_api_subnet_cidr)" \
+          -var "database_subnet_cidr=$(database_subnet_cidr)" \
+          -var "app_gateway_name=$(app_gateway_name)" \
+          -var "app_gateway_public_ip_cidr=$(app_gateway_public_ip_cidr)" \
+          -var "app_gateway_public_ip_id=$(app_gateway_public_ip_id)" \
+          -var "ssl_certificate_path=$(ssl_certificate_path)" \
+          -var "ssl_certificate_password=$(ssl_certificate_password)" \
+          -var "collection_name=$(collection_name)" \
+          -var "database_name=$(database_name)" \
+          -var "subscription_id=$(subscription_id)" \
+          -var "client_id=$(client_id)" \
+          -var "client_secret=$(client_secret)" \
+          -var "tenant_id=$(tenant_id)"
+      displayName: 'Terraform Plan'
+
+- stage: Apply
+  dependsOn: Plan
+  jobs:
+  - job: TerraformApply
+    displayName: 'Terraform Apply'
+    steps:
+    - checkout: self
+
+    - task: AzureCLI@2
+      inputs:
+        azureSubscription: 'Automation'  # Update with your service connection name
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          az account show
+    
+    - script: |
+        export ARM_CLIENT_ID=$(client_id)
+        export ARM_CLIENT_SECRET=$(client_secret)
+        export ARM_SUBSCRIPTION_ID=$(subscription_id)
+        export ARM_TENANT_ID=$(tenant_id)
+        terraform init
+      displayName: 'Terraform init'
+      
+    - script: |
+        export ARM_CLIENT_ID=$(client_id)
+        export ARM_CLIENT_SECRET=$(client_secret)
+        export ARM_SUBSCRIPTION_ID=$(subscription_id)
+        export ARM_TENANT_ID=$(tenant_id)
+        terraform apply -var "web_app_resource_group_name=$(web_app_resource_group_name)" \
+                        -var "network_resource_group_name=$(network_resource_group_name)" \
+                        -var "location=$(location)" \
+                        -var "redis_cache_name=$(redis_cache_name)" \
+                        -var "redis_capacity=$(redis_capacity)" \
+                        -var "redis_family=$(redis_family)" \
+                        -var "redis_sku_name=$(redis_sku_name)" \
+                        -var "cosmosdb_account_name=$(cosmosdb_account_name)" \
+                        -var "app_service_plan_name=$(app_service_plan_name)" \
+                        -var "api_app_name=$(api_app_name)" \
+                        -var "frontend_app_name=$(frontend_app_name)" \
+                        -var "vnet_name=$(vnet_name)" \
+                        -var "vnet_cidr=$(vnet_cidr)" \
+                        -var "app_gateway_subnet_cidr=$(app_gateway_subnet_cidr)" \
+                        -var "private_api_subnet_cidr=$(private_api_subnet_cidr)" \
+                        -var "database_subnet_cidr=$(database_subnet_cidr)" \
+                        -var "api_plink_subnet_cidr=$(api_plink_subnet_cidr)" \
+                        -var "app_gateway_public_ip_cidr=$(app_gateway_public_ip_cidr)" \
+                        -var "app_gateway_name=$(app_gateway_name)" \
+                        -var "app_gateway_public_ip_id=$(app_gateway_public_ip_id)" \
+                        -var "ssl_certificate_path=$(ssl_certificate_path)" \
+                        -var "ssl_certificate_password=$(ssl_certificate_password)" \
+                        -var "collection_name=$(collection_name)" \
+                        -var "database_name=$(database_name)" \
+                        -var "subscription_id=$(subscription_id)" \
+                        -var "client_id=$(client_id)" \
+                        -var "client_secret=$(client_secret)" \
+                        -var "tenant_id=$(tenant_id)" -auto-approve
+      displayName: 'Terraform Apply'
