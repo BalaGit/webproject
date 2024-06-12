@@ -1,0 +1,9 @@
+variable "frontend_app_name" {}
+variable "resource_group_name" {}
+variable "location" {}
+variable "app_service_plan_id" {}
+variable "private_api_app_private_endpoint_ip" {}
+variable "cosmosdb_account_endpoint" {}
+variable "cosmosdb_account_key" {}
+variable "redis_hostname" {}
+variable "redis_primary_key" {}
